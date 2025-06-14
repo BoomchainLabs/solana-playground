@@ -16,10 +16,7 @@ export const pg = createCmd({
       name: "get",
       description: "Get setting value",
       args: createArgs([settingIdArg]),
-      handle: (input) => {
-        const value = PgSettings.get(input.args.id);
-        PgTerminal.println(value);
-      },
+      handle: (input) => PgTerminal.println(PgSettings.get(input.args.id)),
     }),
 
     createSubcmd({
@@ -31,23 +28,55 @@ export const pg = createCmd({
           name: "value",
           description: "Value to set",
           values: (token, tokens) => {
-            const id = token
-              ? tokens[tokens.findIndex((t) => t === token) - 1]
-              : tokens[tokens.length - 1];
+            // TODO: Find a better way to reliably get the setting ID because
+            // passing an option before the third token would break this logic
+            const id = tokens.at(2);
             const setting = PgSettings.all.find((s) => s.id === id);
             if (!setting) throw new Error(`Setting not found: ${id}`);
 
-            // TODO: Fix complex values e.g. `connection.endpoint`
-            return setting.values
-              ? PgCommon.callIfNeeded(setting.values).map((v) => `${v}`)
-              : ["true", "false"];
+            // If `values` field is not specified, default to boolean
+            if (!setting.values) return ["true", "false"];
+
+            const values = PgCommon.callIfNeeded(setting.values).map((v) => {
+              if (typeof v === "string") return v;
+              if (typeof v === "object" && v.name && v.value) return v.name;
+
+              // TODO: Objects with `values` field
+              throw new Error(`Unimplemented setting value: ${v}`);
+            });
+
+            // If the setting has a custom component, allow the current token
+            // to be used as a setting value.
+            //
+            // TODO: The setting should implement a method to decide whether a
+            // value is valid, and we should use it to verify the `token` here.
+            // Otherwise, this results in allowing all values e.g. for
+            // `connection.endpoint`, the user can set non-URL values.
+            if (setting.CustomComponent) values.push(token);
+            return values;
           },
         },
       ]),
       handle: (input) => {
+        const id = input.args.id;
         const val = input.args.value;
-        const parsedVal = PgCommon.isBoolean(val) ? val === "true" : val;
-        PgSettings.set(input.args.id, parsedVal);
+        const setting = PgSettings.all.find((s) => s.id === id);
+        if (!setting) throw new Error(`Setting not found: ${id}`);
+
+        let parsedVal = PgCommon.callIfNeeded(setting.values)?.find(
+          (v) => v.name === val
+        )?.value;
+        if (!parsedVal) {
+          // TODO: Parse based on setting's `values` prop (currently, there is
+          // no way to indicate what type custom values are going to be)
+          parsedVal = PgCommon.isBoolean(val)
+            ? val === "true"
+            : PgCommon.isInt(val)
+            ? parseInt(val)
+            : val;
+        }
+
+        PgSettings.set(id, parsedVal);
       },
     }),
   ],
