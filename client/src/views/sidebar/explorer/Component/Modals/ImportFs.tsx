@@ -1,4 +1,4 @@
-import { ChangeEvent, FC, useState } from "react";
+import { FC, useState } from "react";
 import styled from "styled-components";
 
 import Input from "../../../../../components/Input";
@@ -29,11 +29,6 @@ export const ImportFs: FC<ImportFsProps> = (props) => {
 
   const mounted = useMounted();
 
-  const handleChange = (ev: ChangeEvent<HTMLInputElement>) => {
-    setName(ev.target.value);
-    setImportError("");
-  };
-
   const onDrop = async (userFiles: Array<File & { path: string }>) => {
     try {
       const importFiles: TupleFiles = [];
@@ -51,6 +46,7 @@ export const ImportFs: FC<ImportFsProps> = (props) => {
       // Multiple programs require selecting the program to import which closes
       // the current modal
       if (!mounted.current) {
+        PgView.closeModal();
         PgView.setModal(<ImportFs name={name} files={pgFiles} />);
       } else {
         setFiles(pgFiles);
@@ -58,6 +54,7 @@ export const ImportFs: FC<ImportFsProps> = (props) => {
       }
     } catch (e: any) {
       if (!mounted.current) {
+        PgView.closeModal();
         PgView.setModal(<ImportFs name={name} filesError={e.message} />);
       } else {
         setFilesError(e.message);
@@ -84,7 +81,7 @@ export const ImportFs: FC<ImportFsProps> = (props) => {
           <MainText>Project name</MainText>
           <Input
             autoFocus
-            onChange={handleChange}
+            onChange={(ev) => setName(ev.target.value)}
             value={name}
             error={importError}
             placeholder="my local project..."
